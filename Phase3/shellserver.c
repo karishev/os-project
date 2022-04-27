@@ -318,48 +318,16 @@ void reading_input(char *input) // reading teh input and working with it
     }
 }
 
-int main() // main function
-{
-    signal(SIGINT, serverExitHandler);
+void* HandleClient(void* new_socket) {
 
-    int sock1, sock2, valread;
-    struct sockaddr_in address; // structure for storing addres; local interface and port
-    int addrlen = sizeof(address);
-
-    // Creating socket file descriptor with communication: domain of internet protocol version 4, type of SOCK_STREAM for reliable/conneciton oriented communication, protocol of internet
-    if ((sock1 = socket(AF_INET, SOCK_STREAM, 0)) == 0) // checking if socket creation fail
-    {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // setting the address to be bind to socket
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(PORT);
-
-    // attaching socket to addresses (any/all local ip with port 5564)
-    if (bind(sock1, (struct sockaddr *)&address, sizeof(address)) < 0) // checking if bind fails
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    while (1)
-    {
-        if (listen(sock1, NUM_CLIENTS) < 0) // defining for socket length of queue for pending client connections
-        {
-            perror("Listen Failed");
-            exit(EXIT_FAILURE);
-        }
-        if ((sock2 = accept(sock1, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) // accepting the client connection with creation/return of a new socket for the established connection to enable dedicated communication (active communication on a new socket) with the client
-        {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
+        pthread_detach(pthread_self()); // detach the thread as we don't need to synchronize/join with the other client threads, their execution/code flow does not depend on our termination/completion 
+        int sock2 = *(int*)new_socket;
+        free(new_socket);
+        printf("handling new client in a thread using socket: %d\n", sock2);
+        printf("Listening to client..\n"); // while printing make sure to end your strings with \n or \0 to flush the stream, other wise if in anyother concurent
 
         char *shell_init_msg =
-            "\n\n******************"
+        "\n\n******************"
             "*********************************"
             "\n\n  **Remote CLI Shell G22 by Adilet and Shyngys**  "
             "\n\n\t- Start by typing your commands! -"
@@ -388,26 +356,100 @@ int main() // main function
                 {
                     printf("Exiting server socket... \n");
                     close(sock2);
-                    break;
+                    pthread_exit(NULL);// terminate the thread
+                }
+
+                if (strcmp(message, "exit_client") == 0)
+                {
+                    printf("Exiting server socket... \n");
+                    close(sock2);
+                    pthread_exit(NULL);// terminate the thread
                 }
 
                 // redirecting stdout to sock2
                 //  from: https://stackoverflow.com/questions/8100817/redirect-stdout-and-stderr-to-socket-in-c
-                dup2(sock2, STDOUT_FILENO);
-                dup2(sock2, STDERR_FILENO);
+                 dup2(sock2, STDOUT_FILENO);
+                 dup2(sock2, STDERR_FILENO);
                 close(sock2);
 
                 reading_input(message);
             }
             else
             {
-                wait(NULL);
+               wait(NULL);
 
                 // continue;
             }
         }
+    pthread_exit(NULL);
+}
+
+
+int main() // main function
+{
+    signal(SIGINT, serverExitHandler);
+
+    int sock1, sock2, valread;
+    struct sockaddr_in address; // structure for storing addres; local interface and port
+    int addrlen = sizeof(address);
+
+    // Creating socket file descriptor with communication: domain of internet protocol version 4, type of SOCK_STREAM for reliable/conneciton oriented communication, protocol of internet
+    if ((sock1 = socket(AF_INET, SOCK_STREAM, 0)) == 0) // checking if socket creation fail
+    {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
     }
-    printf("All processes terminated. End of session. \n");
+
+    // setting the address to be bind to socket
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_ANY);
+    address.sin_port = htons(PORT);
+
+    // attaching socket to addresses (any/all local ip with port 5564)
+    if (bind(sock1, (struct sockaddr *)&address, sizeof(address)) < 0) // checking if bind fails
+    {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(sock1, NUM_CLIENTS) < 0) // defining for socket length of queue for pending client connections
+        {
+            perror("Listen Failed");
+            exit(EXIT_FAILURE);
+        }
+
+    while (1)
+    {
+        
+        if ((sock2 = accept(sock1, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) // accepting the client connection with creation/return of a new socket for the established connection to enable dedicated communication (active communication on a new socket) with the client
+        {
+            perror("accept");
+            exit(EXIT_FAILURE);
+
+        }
+
+        int rc; // return value from pthread_create to check if new thread is created successfukky                           */
+        pthread_t  thread_id;  // thread's ID (just an integer, typedef unsigned long int) to indetify new thread
+        int* new_socket = (int*)malloc(sizeof(int)); // for passing safely the integer socket to the thread
+        if ( new_socket == NULL ) {
+            fprintf(stderr, "Couldn't allocate memory for thread new socket argument.\n");
+            exit(EXIT_FAILURE);
+        }
+        *new_socket = sock2;
+
+
+        rc = pthread_create(&thread_id, NULL, HandleClient, new_socket);  
+
+        if(rc)      // if rc is > 0 imply could not create new thread 
+        {
+            printf("\n ERROR: return code from pthread_create is %d \n", rc);
+            exit(EXIT_FAILURE);
+        }
+
+    }
+
+
+    //printf("All processes terminated. End of session. \n");
 
     close(sock1);
 

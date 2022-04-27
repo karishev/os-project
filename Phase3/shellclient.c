@@ -9,10 +9,11 @@
 
 #define PORT 5800
 
+int sock = 0;
+
 // function routine of Signal Handler for SIGINT, to send connection termination message to server and terminates the client process
-void clientExitHandler(int sig_num, void *socket)
+void clientExitHandler(int sig_num )
 {
-	int sock = *(int *)socket;
 	send(sock, "exit_client", strlen("exit_client"), 0); // sending exit message to server
 	close(sock);										 // close the socket/end the conection
 	printf("Exiting client.  \n");
@@ -32,7 +33,7 @@ void print_current_directory()
 int main()
 {
 	signal(SIGINT, clientExitHandler);
-	int sock = 0;
+	
 	struct sockaddr_in serv_addr;
 
 	// Creating socket file descriptor with communication: domain of internet protocol version 4, type of SOCK_STREAM for reliable/conneciton oriented communication, protocol of internet
@@ -83,6 +84,8 @@ int main()
 		{
 			continue;
 		}
+		
+		send(sock, input, strlen(input), 0);
 
 		// If user enters exit command, we send it first to the server, so that server process terminates and then we check the command on client and terminate
 		if (strcmp(input, "exit") == 0)
@@ -91,7 +94,7 @@ int main()
 			break;
 		}
 
-		send(sock, input, strlen(input), 0);
+		
 		
 		char message[1024] = {0};
 		recv(sock, message, sizeof(message), 0);
