@@ -4,6 +4,8 @@
 #include <stdlib.h>     // header for general functions declarations: exit() and also has exit macros such as EXIT_FAILURE - unsuccessful execution of a program
 #include <sys/socket.h> // header for socket specific functions and macros declarations
 #include <netinet/in.h> //header for MACROS and structures related to addresses "sockaddr_in", INADDR_ANY
+#include <arpa/inet.h> // header for functions related to addresses from text to binary form, inet_pton 
+#include <pthread.h> // header for thread functions declarations: pthread_create, pthread_join, pthread_exit
 #include <string.h>     // header for string functions declarations: strlen()
 #include <signal.h>     // header for signal related functions and macros declarations
 
