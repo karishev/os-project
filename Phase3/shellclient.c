@@ -6,17 +6,25 @@
 #include <string.h>		// header for string functions declarations: strlen()
 #include <arpa/inet.h>	// header for functions related to addresses from text to binary form, inet_pton
 #include <signal.h>		// header for signal related functions and macros declarations
+#include <sys/time.h>
+#include<fcntl.h>	//fcntl
+
+#define CHUNK_SIZE 512
 
 #define PORT 5800
 
 int sock = 0;
+
+int recv_timeout(int s, int timeout);
+
+
 
 // function routine of Signal Handler for SIGINT, to send connection termination message to server and terminates the client process
 void clientExitHandler(int sig_num )
 {
 	send(sock, "exit_client", strlen("exit_client"), 0); // sending exit message to server
 	close(sock);										 // close the socket/end the conection
-	printf("Exiting client.  \n");
+	printf("\nExiting client.  \n");
 	fflush(stdout); // force to flush any data in buffers to the file descriptor of standard output,, a pretty convinent function
 	exit(0);
 }
@@ -87,21 +95,79 @@ int main()
 		
 		send(sock, input, strlen(input), 0);
 
-		// If user enters exit command, we send it first to the server, so that server process terminates and then we check the command on client and terminate
+	
 		if (strcmp(input, "exit") == 0)
 		{
 			printf("Exiting client socket... \n");
 			break;
 		}
-
 		
 		
-		char message[1024] = {0};
-		recv(sock, message, sizeof(message), 0);
+		// char message[1024] = {0};
+		// recv(sock, message, sizeof(message), 0);
 
-		printf("Client received: \n%s\n", message);
+		//printf("Client received: \n%s\n", message);
+
+		printf("Cleint received: \n");
+		int total_recv = recv_timeout(sock, 1);
+		printf("\n\nDone. Received a total of %d bytes\n\n" , total_recv);
+
+		
 	}
 
 	printf("All processes terminated. End of session. \n");
 	close(sock);
+
+}
+
+// Code used from: https://www.binarytides.com/receive-full-data-with-recv-socket-function-in-c/
+
+int recv_timeout(int s , int timeout)
+{
+	int size_recv , total_size= 0;
+	struct timeval begin , now;
+	char chunk[CHUNK_SIZE];
+	double timediff;
+	
+	//make socket non blocking
+	fcntl(s, F_SETFL, O_NONBLOCK);
+	
+	//beginning time
+	gettimeofday(&begin , NULL);
+	
+	while(1)
+	{
+		gettimeofday(&now , NULL);
+		
+		//time elapsed in seconds
+		timediff = (now.tv_sec - begin.tv_sec) + 1e-6 * (now.tv_usec - begin.tv_usec);
+		
+		//if you got some data, then break after timeout
+		if( total_size > 0 && timediff > timeout )
+		{
+			break;
+		}
+		
+		//if you got no data at all, wait a little longer, twice the timeout
+		else if( timediff > timeout*2)
+		{
+			break;
+		}
+		
+		memset(chunk ,0 , CHUNK_SIZE);	//clear the variable
+		if((size_recv =  recv(s , chunk , CHUNK_SIZE , 0) ) < 0)
+		{
+			//if nothing was received then we want to wait a little before trying again, 0.1 seconds
+			usleep(100000);
+		}
+		else
+		{
+			total_size += size_recv;
+			printf("%s" , chunk);
+			//reset beginning time
+			gettimeofday(&begin , NULL);
+		}
+	}
+	
+	return total_size;
 }
